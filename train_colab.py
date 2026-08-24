@@ -1,7 +1,8 @@
 """
 Plant Disease Detection - Colab Training Script
 --------------------------------------------------
-Built for Rishmina Sherin's Xantory AI Vision Developer project.
+Built for a plant disease detection computer vision project focused on
+precision/vertical farming applications.
 
 WHY THIS SCRIPT:
 - Runs on Colab's free GPU (15-30x faster than your CPU)
