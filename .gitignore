@@ -1,0 +1,27 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Dataset — ~380MB, not meant for version control; see README for how to obtain it
+data/
+data.zip
+
+# Trained model weights — large binaries; regenerate via train.py or the
+# Colab training notebooks (see README)
+models/*.onnx
+models/*.onnx.data
+models/*.pt
+
+# MLflow tracking store, local run databases, and sanity-check-only artifacts
+mlruns/
+outputs/_sanity_check/
+*.db
+
+# Dashboard build artifacts (dashboard/ also has its own .gitignore)
+dashboard/node_modules/
+dashboard/dist/
+
+# OS / editor
+.DS_Store
+Thumbs.db
