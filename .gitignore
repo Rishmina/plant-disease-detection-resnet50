@@ -8,10 +8,14 @@ data/
 data.zip
 
 # Trained model weights — large binaries; regenerate via train.py or the
-# Colab training notebooks (see README)
+# Colab training notebooks (see README). Exception: the v2 (fine-tuned) ONNX
+# export is kept in-repo since the deployed API loads it at startup — tracked
+# via Git LFS (see .gitattributes).
 models/*.onnx
 models/*.onnx.data
 models/*.pt
+!models/plant_disease_model_v2.onnx
+!models/plant_disease_model_v2.onnx.data
 
 # MLflow tracking store, local run databases, and sanity-check-only artifacts
 mlruns/
