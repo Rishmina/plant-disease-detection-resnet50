@@ -150,6 +150,34 @@ pass — averages **~50ms per image on CPU**, measured live through the `/predic
 endpoint the dashboard calls. That's fast enough for interactive, per-image review
 rather than a batch job.
 
+### Test Set Evaluation
+
+Full evaluation on the held-out test set (4,128 images, via `evaluate_model.py`)
+confirms the model generalizes consistently: **94.55% test accuracy**, closely
+matching the 94.40% validation accuracy reached during fine-tuning.
+
+![Confusion Matrix](docs/confusion_matrix.png)
+
+Per-class analysis shows the model's errors cluster around diseases that are
+visually similar even to trained observers, rather than random or systematic
+failures:
+- Tomato Early Blight ↔ Septoria Leaf Spot — both produce dark, irregular leaf
+  lesions and are a documented source of visual ambiguity in tomato disease
+  identification
+- Target Spot ↔ Septoria Leaf Spot ↔ Spider Mite damage — similarly overlapping
+  visual symptoms
+
+The one pattern worth flagging: Pepper Bacterial Spot vs. Pepper healthy (20
+misclassifications) is the model's most safety-relevant confusion, since
+distinguishing disease from health matters more than distinguishing between two
+diseases. This suggests early-stage/subtle presentations of bacterial spot are
+the model's primary weak point — a natural target for future data augmentation
+or targeted fine-tuning.
+
+Per-class precision/recall/F1 and the full misclassification breakdown are in
+[`docs/evaluation_report.txt`](docs/evaluation_report.txt); reproduce with
+`python evaluate_model.py`.
+
 ---
 
 ## 5. System Architecture / Pipeline
@@ -353,6 +381,91 @@ this and skips the heatmap step for `.onnx` inputs rather than faking one).
 python predict.py --image path/to/leaf.jpg --model models/resnet50_v1.pt
 # → outputs/predictions/<image>_gradcam.png
 ```
+
+### Cross-Class Grad-CAM Grid
+
+`gradcam_analysis.py` runs the same idea across every class at once — Grad-CAM
+against `model.layer4[-1]` (the final residual block, and the one
+`finetune_colab.py` actually fine-tunes) for one representative image per class,
+rendered as a single grid to check for genuine disease-relevant attention rather
+than spurious correlations with background, lighting, or the table surface the
+leaf was photographed on:
+
+![Grad-CAM Grid](docs/gradcam/all_classes_grid.png)
+
+Across the diseased classes, the hottest activation consistently lands on the
+visible lesion itself rather than the background: the two blight spots on
+`Potato___Early_blight`, the necrotic leaf edge on `Tomato_Bacterial_spot`, the
+dried petiole on `Tomato_Late_blight`, and the curled, discolored leaf tip on
+`Tomato__Tomato_YellowLeaf__Curl_Virus` all show their reddest activation
+directly over the diseased tissue. For the healthy classes, where no lesion
+exists, attention instead settles on the central leaf body and main vein — a
+reasonable default rather than a spurious cue, since there's nothing
+disease-specific to key on. 14 of the 15 representative images were classified
+correctly; the one miss — `Potato___healthy`, predicted as
+`Pepper__bell___healthy` at 40.52% confidence — is investigated below.
+
+```bash
+python gradcam_analysis.py --batch data/test
+# → docs/gradcam/all_classes_grid.png
+```
+
+**A caveat on reading these heatmaps.** Grad-CAM visualizations show the model
+consistently attends to the central leaf region, but reveal a known limitation:
+`layer4`'s coarse spatial resolution (~7×7 for a 224px input) produces broad,
+blob-like heatmaps rather than precise per-lesion localization. Healthy leaves
+show similar central attention to diseased ones, suggesting some center bias
+inherited from the dataset's consistently centered, plain-background
+photography rather than pure lesion-specific reasoning. A higher-resolution
+attribution method (e.g. Grad-CAM on an earlier layer, or Grad-CAM++) would be
+needed to confirm precise lesion-level attention — see the layer3 comparison
+below.
+
+### A Closer Look: the Potato → Pepper Misclassification
+
+Unlike the aggregate confusions in the [test-set evaluation](#test-set-evaluation)
+above, this one is the "expected" failure mode: low confidence *and* wrong,
+rather than confidently wrong. `gradcam_analysis.py` supports single-image mode
+for exactly this kind of follow-up:
+
+```bash
+python gradcam_analysis.py "data/test/Potato___healthy/07dfb451-...5399.JPG"
+# → Predicted: Pepper__bell___healthy (confidence: 0.4052)
+```
+
+![Potato healthy misclassified as Pepper bell healthy](docs/gradcam/potato_healthy_misclassification.png)
+
+The photo itself is the likely cause: it's a single glossy, rounded leaflet shot
+on the same plain gray background and diagonal-shadow lighting as the
+`Pepper__bell___healthy` training exemplars, rather than the whole compound
+potato leaf most other `Potato___healthy` photos show. At 224×224 the model
+appears to be keying on coarse silhouette and surface texture more than
+species-specific venation — consistent with the center-bias caveat above, and
+with the 90% recall already visible for this class in the full test-set
+evaluation (3 of 30 test images misclassified, `docs/evaluation_report.txt`).
+
+**Trying `layer3` for sharper localization.** `--layer layer3` switches the CAM
+to an earlier residual block (14×14 vs. `layer4`'s 7×7) at the cost of being one
+stage further from the actually-fine-tuned weights:
+
+```bash
+python gradcam_analysis.py path/to/leaf.jpg --layer layer3
+```
+
+| `layer4` (7×7) | `layer3` (14×14) |
+|---|---|
+| ![Early blight, layer4](docs/gradcam/potato_early_blight_layer4.png) | ![Early blight, layer3](docs/gradcam/potato_early_blight_layer3.png) |
+
+On a `Potato___Early_blight` image with two distinct lesions, `layer3` breaks
+the single `layer4` blob into multiple discrete hotspots that track the
+individual lesions more closely — partial confirmation of the resolution
+hypothesis. But it's a real tradeoff, not a strict improvement: the `layer3` map
+is visibly noisier and leaks activation into the background, and re-running it
+on the misclassified `Potato___healthy` image doesn't resolve the ambiguity —
+it just replaces one smooth central blob with several scattered ones, still
+with no lesion to anchor to. Earlier layers see more spatial detail but encode
+less class-specific information, so this is a real precision/noise tradeoff
+rather than a fix.
 
 ---
 

@@ -81,14 +81,20 @@ def load_finetuned_model(model_path: str, device: torch.device):
 
 
 class GradCAM:
-    """Grad-CAM against model.layer4[-1] — the final ResNet50 Bottleneck block,
-    and the one finetune_colab.py actually unfreezes and fine-tunes."""
+    """Grad-CAM against the last Bottleneck block of a named ResNet50 layer group.
 
-    def __init__(self, model: nn.Module):
+    Defaults to layer4[-1] — the final residual block, and the one
+    finetune_colab.py actually unfreezes and fine-tunes. layer3 has 2x the
+    spatial resolution (14x14 vs layer4's 7x7 for a 224px input) at the cost
+    of being one stage further from the fine-tuned weights, which trades
+    localization sharpness against how directly the CAM reflects what
+    fine-tuning actually changed."""
+
+    def __init__(self, model: nn.Module, layer_name: str = "layer4"):
         self.model = model
         self.activations = None
         self.gradients = None
-        target_layer = model.layer4[-1]
+        target_layer = getattr(model, layer_name)[-1]
         self._fwd_handle = target_layer.register_forward_hook(self._save_activations)
         self._bwd_handle = target_layer.register_full_backward_hook(self._save_gradients)
 
@@ -157,7 +163,7 @@ def run_one(image_path: str, class_names: list, device: torch.device, gradcam: G
 def cmd_single(args):
     device = get_device()
     model, class_names = load_finetuned_model(args.model, device)
-    gradcam = GradCAM(model)
+    gradcam = GradCAM(model, layer_name=args.layer)
     try:
         original, overlay, pred_class, confidence = run_one(args.image, class_names, device, gradcam)
     finally:
@@ -192,7 +198,7 @@ def pick_representative_images(data_dir: str, class_names: list) -> dict:
 def cmd_batch(args):
     device = get_device()
     model, class_names = load_finetuned_model(args.model, device)
-    gradcam = GradCAM(model)
+    gradcam = GradCAM(model, layer_name=args.layer)
 
     representative = pick_representative_images(args.batch, class_names)
     n = len(representative)
@@ -210,10 +216,18 @@ def cmd_batch(args):
             original, overlay, pred_class, confidence = run_one(image_path, class_names, device, gradcam)
             combined = side_by_side(original, overlay)
 
+            match_mark = "✓" if pred_class == class_name else "✗"
+            # Printed to the console (not just the plot title) so results can be
+            # checked exactly, rather than read off small text in a compressed image.
+            # ASCII-only here since Windows consoles default to a codepage that
+            # can't encode the check/cross marks used in the plot title.
+            console_mark = "OK" if pred_class == class_name else "WRONG"
+            print(f"  -> {os.path.basename(image_path)}: predicted {pred_class} "
+                  f"({confidence:.2%}) [{console_mark}]")
+
             ax = axes[i - 1]
             ax.imshow(combined)
             ax.axis("off")
-            match_mark = "✓" if pred_class == class_name else "✗"
             ax.set_title(
                 f"{class_name}\npred: {pred_class} ({confidence:.0%}) {match_mark}",
                 fontsize=8,
@@ -224,11 +238,12 @@ def cmd_batch(args):
     for ax in axes[n:]:
         ax.axis("off")
 
-    fig.suptitle("Grad-CAM — layer4[-1] activations across all classes", fontsize=13)
+    fig.suptitle(f"Grad-CAM — {args.layer}[-1] activations across all classes", fontsize=13)
     fig.tight_layout(rect=[0, 0, 1, 0.97])
 
     os.makedirs(DOCS_GRADCAM_DIR, exist_ok=True)
-    grid_path = os.path.join(DOCS_GRADCAM_DIR, "all_classes_grid.png")
+    suffix = "" if args.layer == "layer4" else f"_{args.layer}"
+    grid_path = os.path.join(DOCS_GRADCAM_DIR, f"all_classes_grid{suffix}.png")
     fig.savefig(grid_path, dpi=150)
     plt.close(fig)
     print(f"\nSaved combined grid to {grid_path}")
@@ -244,6 +259,10 @@ def parse_args():
     )
     parser.add_argument("--model", default=DEFAULT_MODEL_PATH,
                          help=f"Path to the PyTorch checkpoint (default: {DEFAULT_MODEL_PATH})")
+    parser.add_argument("--layer", default="layer4", choices=["layer1", "layer2", "layer3", "layer4"],
+                         help="ResNet layer group to target (default: layer4, the fine-tuned block). "
+                              "layer3 has 2x the spatial resolution, at the cost of being one stage "
+                              "further from the fine-tuned weights.")
     parser.add_argument("--output", default=None,
                          help="Output path for single-image mode (default: docs/gradcam/<stem>_gradcam.png)")
     args = parser.parse_args()
@@ -262,7 +281,8 @@ def main():
     else:
         if args.output is None:
             stem = os.path.splitext(os.path.basename(args.image))[0]
-            args.output = os.path.join(DOCS_GRADCAM_DIR, f"{stem}_gradcam.png")
+            suffix = "" if args.layer == "layer4" else f"_{args.layer}"
+            args.output = os.path.join(DOCS_GRADCAM_DIR, f"{stem}_gradcam{suffix}.png")
         cmd_single(args)
 
 

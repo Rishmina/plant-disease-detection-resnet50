@@ -1,0 +1,40 @@
+Plant Disease Detection — Model Evaluation Report
+Model: models/plant_disease_model_v2.onnx
+Test set: data\test (4128 images, 15 classes)
+======================================================================
+
+Overall test accuracy: 0.9455 (94.55%)
+
+                                             precision    recall  f1-score   support
+
+              Pepper__bell___Bacterial_spot     0.9730    0.9000    0.9351       200
+                     Pepper__bell___healthy     0.9190    0.9966    0.9562       296
+                      Potato___Early_blight     0.9565    0.9900    0.9730       200
+                       Potato___Late_blight     0.9727    0.8900    0.9295       200
+                           Potato___healthy     0.9000    0.9000    0.9000        30
+                      Tomato_Bacterial_spot     0.9712    0.9484    0.9596       426
+                        Tomato_Early_blight     0.9027    0.8350    0.8675       200
+                         Tomato_Late_blight     0.9396    0.9372    0.9384       382
+                           Tomato_Leaf_Mold     0.9831    0.9158    0.9482       190
+                  Tomato_Septoria_leaf_spot     0.8660    0.9859    0.9221       354
+Tomato_Spider_mites_Two_spotted_spider_mite     0.9461    0.9433    0.9447       335
+                        Tomato__Target_Spot     0.9188    0.8861    0.9022       281
+      Tomato__Tomato_YellowLeaf__Curl_Virus     0.9968    0.9704    0.9834       642
+                Tomato__Tomato_mosaic_virus     0.8000    0.9189    0.8553        74
+                             Tomato_healthy     0.9754    0.9969    0.9860       318
+
+                                   accuracy                         0.9455      4128
+                                  macro avg     0.9347    0.9343    0.9334      4128
+                               weighted avg     0.9473    0.9455    0.9455      4128
+
+Most-confused class pairs (true class -> predicted class):
+  Pepper__bell___Bacterial_spot is most often confused with Pepper__bell___healthy (20 misclassifications)
+  Tomato_Early_blight is most often confused with Tomato_Septoria_leaf_spot (18 misclassifications)
+  Tomato_Spider_mites_Two_spotted_spider_mite is most often confused with Tomato__Target_Spot (11 misclassifications)
+  Tomato__Target_Spot is most often confused with Tomato_Septoria_leaf_spot (11 misclassifications)
+  Tomato_Bacterial_spot is most often confused with Tomato_Septoria_leaf_spot (10 misclassifications)
+  Tomato_Late_blight is most often confused with Tomato_Early_blight (10 misclassifications)
+  Potato___Late_blight is most often confused with Potato___Early_blight (9 misclassifications)
+  Tomato__Tomato_YellowLeaf__Curl_Virus is most often confused with Tomato_Spider_mites_Two_spotted_spider_mite (9 misclassifications)
+  Potato___Late_blight is most often confused with Tomato_Late_blight (8 misclassifications)
+  Tomato_Bacterial_spot is most often confused with Tomato_Late_blight (7 misclassifications)
