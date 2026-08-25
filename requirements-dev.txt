@@ -1,0 +1,7 @@
+# Dev/analysis-only dependencies — NOT needed by the deployed API (predict_api.py
+# runs on onnxruntime alone). Install these only for scripts that need direct
+# PyTorch gradient access, e.g. gradcam_analysis.py.
+#
+#   pip install -r requirements.txt -r requirements-dev.txt
+torch==2.13.0
+torchvision==0.28.0
